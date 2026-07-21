@@ -14,7 +14,7 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
   Pull historical electricity price, demand, and generation-mix data from SMARD; pull charging station locations from the Bundesnetzagentur's register. Clean, align time zones, handle gaps.
 - [x] **Phase 2 — Exploratory data analysis**
   Understand daily/weekly/seasonal price and renewable-share patterns. Identify the features that actually matter for forecasting.
-- [ ] **Phase 3 — Forecasting model**
+- [x] **Phase 3 — Forecasting model**
   Train a model (starting with XGBoost, comparing against Prophet) to forecast next 24-48h electricity price and renewable share.
 - [ ] **Phase 4 — Recommendation engine**
   Turn forecasts into a simple ranked list of "best charging windows," balancing cost and green-ness.
@@ -67,6 +67,61 @@ Learned by actually running `data_fetch.py` against the live APIs (as opposed to
 - **`nuclear_mw` (filter 1224) is a dead series.** Germany's nuclear phase-out completed in April 2023, and the filter stopped receiving new chunks in Jan 2024. `clean_data.py` fills it with `0` rather than leaving it null or dropping it, since zero is the real value.
 - Negative day-ahead prices are real and fairly common (~6% of hours in the current dataset) — that's the market working as intended during renewable oversupply, not a data error.
 
+## Forecasting Model (Phase 3)
+
+`src/forecast.py` implements a **direct multi-horizon** approach: instead of
+recursively forecasting one hour at a time (which compounds error), a single
+model takes `horizon` (1-48) as a feature alongside calendar features
+(hour/day-of-week/month, cyclically encoded) and lag/rolling features (1h,
+2h, 3h, 24h, 48h, 168h lags; 24h/168h rolling mean+std) for price, load, and
+renewable share — then predicts any of the next 48 hours directly from one
+feature vector computed at the forecast origin.
+
+**Benchmarks, not just a model-vs-model comparison.** Any "real" model needs
+to beat a trivial baseline to be worth using, so two are included:
+
+- **Persistence naive** — "it'll stay whatever it is right now" (repeat the
+  last known value for all 48 hours). The floor any model should clear.
+- **Seasonal naive (t-168h)** — "it'll be whatever it was at this exact hour
+  last week." A 168h (not 24h) lag is used so every horizon up to 48h always
+  references an already-known past timestamp. This is the standard,
+  much-harder-to-beat benchmark for hourly electricity series, since it gets
+  daily *and* day-of-week structure for free.
+
+Backtested on a held-out final 48h window (`python src/forecast.py --target
+price` / `--target renewable_share`, then `--summary` for the combined chart):
+
+| Target | Persistence MAE | Seasonal-naive MAE | Prophet MAE | XGBoost MAE |
+|---|---|---|---|---|
+| price (EUR/MWh) | 75.1 | **21.9** | 38.1 | 35.5 |
+| renewable share | 0.344 | 0.128 | 0.135 | **0.109** |
+
+**The honest finding: seasonal-naive beats both "real" models on price.**
+XGBoost and Prophet both beat persistence easily, and XGBoost beats Prophet —
+but neither beats just copying last week's price at the same hour (skill
+scores of **-62% and -74%** vs. the seasonal-naive benchmark; see
+`models/backtest_skill_score_summary.png`). Looking at
+`models/backtest_price_eur_mwh_timeseries.png`, the reason is visible: the
+backtest window contained two sharp overnight price crashes to near-€0, and
+that same crash recurred at the same hours the week before — so seasonal-naive
+reproduced it almost exactly by construction, while XGBoost/Prophet (trained
+to generalize across many weeks) smoothed the dip into a shallow one and
+missed its depth. Renewable-share is the opposite story: XGBoost is the only
+method to beat seasonal-naive (+15% skill), since it isn't a purely repeating
+weekly pattern the way this particular price event was.
+
+This is a **single 48h backtest window**, not a rolling backtest across many
+windows, and it happened to land on a week where a repeating weekly pattern
+dominated — that's exactly the kind of window where a naive seasonal copy
+looks unreasonably good. Before trusting any of these numbers for the
+recommendation engine, the natural next steps are: (1) a rolling-origin
+backtest across many windows to see whether XGBoost's edge over seasonal-naive
+on renewable-share holds up and whether its price deficit is consistent or
+window-specific, and (2) incorporating SMARD's forecasted-generation filters
+(not currently pulled) as exogenous features, since the price swings driving
+this result are supply shocks that pure lag/calendar features can't see
+coming — a naive lookup of last week can only help when the shock repeats.
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -87,6 +142,7 @@ ev-smart-charging-advisor/
 ├── notebooks/
 │   ├── 01_eda.ipynb        # Phase 2 — daily/weekly/seasonal patterns, price/renewable correlation
 │   └── figures/            # PNGs exported from the notebook
+├── models/                 # Phase 3 — trained models + backtest results (gitignored, regenerate via forecast.py)
 ├── src/
 │   ├── config.py           # paths, SMARD filter map, Ladesäulenregister URL, bbox
 │   ├── data_fetch.py       # pulls SMARD + charging station data
