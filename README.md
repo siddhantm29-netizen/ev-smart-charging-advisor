@@ -10,9 +10,9 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
 
 ## Roadmap
 
-- [ ] **Phase 1 — Data collection & cleaning**
+- [x] **Phase 1 — Data collection & cleaning**
   Pull historical electricity price, demand, and generation-mix data from SMARD; pull charging station locations from the Bundesnetzagentur's register. Clean, align time zones, handle gaps.
-- [ ] **Phase 2 — Exploratory data analysis**
+- [x] **Phase 2 — Exploratory data analysis**
   Understand daily/weekly/seasonal price and renewable-share patterns. Identify the features that actually matter for forecasting.
 - [ ] **Phase 3 — Forecasting model**
   Train a model (starting with XGBoost, comparing against Prophet) to forecast next 24-48h electricity price and renewable share.
@@ -58,6 +58,15 @@ The Bundesnetzagentur also maintains the official register of public EV charging
 
 Data is free to download and use publicly.
 
+## Data Notes & Known Quirks
+
+Learned by actually running `data_fetch.py` against the live APIs (as opposed to the mocked responses it was originally written against):
+
+- **Ladesäulenregister endpoint moved behind a token.** The Bundesnetzagentur-hosted FeatureServer documented in `bundesAPI/ladestationen-api` (`services6.arcgis.com/.../Ladesaeulenregister/FeatureServer/7`) now returns HTTP 200 with a `{"code":499,"message":"Token Required"}` body for anonymous requests. `src/config.py` instead points at Esri Deutschland's public open-data mirror of the same dataset (`services2.arcgis.com/.../Ladesaeulen_in_Deutschland/FeatureServer/0`), which needs no key and is refreshed monthly. Field names changed slightly (e.g. `Nennleistung_Ladepunkt_<n>` → `Nennleistung_Stecker<n>`, up to 6 connectors instead of 4) — `data_fetch.py` doesn't hardcode field names so this required no code changes, just the URL.
+- **SMARD's `hour`-resolution chunks aren't uniform across history.** Recent chunks are consistent 168-hour (1-week) windows that align across all filters; the newest chunk is a rolling window straddling "now," so its tail hours come back as `null` until published. Older chunks (pre-mid-2024) are coarser and misaligned between filters, and there's a real multi-month gap in coverage around Feb–Jul 2024. `src/clean_data.py` trims to the last fully-dense stretch rather than trying to reconcile the older, sparse history.
+- **`nuclear_mw` (filter 1224) is a dead series.** Germany's nuclear phase-out completed in April 2023, and the filter stopped receiving new chunks in Jan 2024. `clean_data.py` fills it with `0` rather than leaving it null or dropping it, since zero is the real value.
+- Negative day-ahead prices are real and fairly common (~6% of hours in the current dataset) — that's the market working as intended during renewable oversupply, not a data error.
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -73,13 +82,17 @@ Data is free to download and use publicly.
 ```
 ev-smart-charging-advisor/
 ├── data/
-│   ├── raw/            # untouched downloads from SMARD & Ladesäulenregister
-│   └── processed/       # cleaned, merged datasets
-├── notebooks/           # EDA and model experimentation
+│   ├── raw/                # untouched downloads from SMARD & Ladesäulenregister
+│   └── processed/          # cleaned, merged datasets
+├── notebooks/
+│   ├── 01_eda.ipynb        # Phase 2 — daily/weekly/seasonal patterns, price/renewable correlation
+│   └── figures/            # PNGs exported from the notebook
 ├── src/
-│   ├── data_fetch.py     # pulls SMARD + charging station data
-│   ├── forecast.py       # training + inference for price/renewable forecasts
-│   └── app.py             # Streamlit app
+│   ├── config.py           # paths, SMARD filter map, Ladesäulenregister URL, bbox
+│   ├── data_fetch.py       # pulls SMARD + charging station data
+│   ├── clean_data.py       # Phase 2 — trims/fixes raw data into data/processed/
+│   ├── forecast.py         # training + inference for price/renewable forecasts
+│   └── app.py              # Streamlit app
 ├── requirements.txt
 └── README.md
 ```

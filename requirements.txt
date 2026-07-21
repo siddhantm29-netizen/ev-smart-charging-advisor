@@ -1,0 +1,24 @@
+# Phase 1 — data collection
+requests>=2.31
+pandas>=2.0
+numpy>=1.24
+python-dateutil>=2.8
+
+# Phase 2 — exploratory data analysis
+matplotlib>=3.8
+jupyter>=1.0
+nbformat>=5.9
+nbconvert>=7.16
+ipykernel>=6.29
+
+# Phase 3 — forecasting
+scikit-learn>=1.3
+xgboost>=2.0
+prophet>=1.1
+
+# Phase 5 — geospatial
+folium>=0.15
+
+# Phase 6 — app
+streamlit>=1.30
+plotly>=5.18
