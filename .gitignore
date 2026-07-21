@@ -8,14 +8,11 @@ env/
 # Environment / secrets
 .env
 
-# Data — regenerate locally via `python src/data_fetch.py`, don't commit large files
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-
-# Models — regenerate locally via `python src/forecast.py`, don't commit large files
-models/
+# Models — figures/CSVs/metrics are tracked (small, human-readable); the
+# serialized model weights are regenerable via `python src/forecast.py` and
+# large enough (~3MB each) to skip
+models/xgboost_*.json
+models/prophet_*.json
 
 # OS / editor
 .DS_Store
