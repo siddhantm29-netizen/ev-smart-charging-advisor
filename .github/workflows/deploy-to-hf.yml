@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # HF's git backend rejects shallow pushes ("shallow update not allowed")
 
       - name: Push to Hugging Face Space
         env:
