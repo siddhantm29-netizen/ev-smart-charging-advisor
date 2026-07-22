@@ -16,7 +16,7 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
   Understand daily/weekly/seasonal price and renewable-share patterns. Identify the features that actually matter for forecasting.
 - [x] **Phase 3 — Forecasting model**
   Train a model (starting with XGBoost, comparing against Prophet) to forecast next 24-48h electricity price and renewable share.
-- [ ] **Phase 4 — Recommendation engine**
+- [x] **Phase 4 — Recommendation engine**
   Turn forecasts into a simple ranked list of "best charging windows," balancing cost and green-ness.
 - [ ] **Phase 5 — Geospatial charging map**
   Plot public charging stations (filterable by connector type, region) using Ladesäulenregister data.
@@ -122,6 +122,48 @@ window-specific, and (2) incorporating SMARD's forecasted-generation filters
 this result are supply shocks that pure lag/calendar features can't see
 coming — a naive lookup of last week can only help when the shock repeats.
 
+## Recommendation Engine (Phase 4)
+
+`src/recommend.py` turns the Phase 3 forecasts into a plain "charge now /
+wait until X" recommendation:
+
+- **Forecasts the next 48h from the latest available data.** Price uses a
+  50/50 blend of the XGBoost model and the seasonal-naive (t-168h) benchmark
+  — a direct consequence of the Phase 3 finding that XGBoost alone
+  underperforms seasonal-naive on price (skill -62%), so the live forecast
+  hedges against that known weakness rather than trusting XGBoost alone.
+  Renewable share uses XGBoost alone, since it was the one model that beat
+  seasonal-naive there.
+- **Scores every hour** on a 0-1 `charge_score`, min-max normalizing price
+  (lower is better) and renewable share (higher is better) within the 48h
+  window, blended by a user-adjustable `--alpha` (0 = cheapest only, 1 =
+  greenest only, default 0.5 — see `--alpha 0` vs `--alpha 1` for how the
+  ranking shifts).
+- **Merges consecutive good hours into windows** rather than listing
+  isolated hours, and reports a plain-language recommendation plus a ranked
+  list (`recommendations/next_48h_windows.json`, `next_48h_forecast.csv`,
+  and `next_48h_recommendation.png`).
+
+```
+python src/recommend.py
+python src/recommend.py --alpha 0.7 --top 5
+```
+
+Example output (as of the last run): the model correctly favors midday hours
+each day — when solar generation peaks, renewable share is highest, and
+price is lowest — and steers clear of the evening demand-peak price spike.
+This tracks directly from the Phase 2 EDA finding that price and renewable
+share both pivot on the midday solar dip.
+
+**Bug found and fixed while refreshing data for this phase:** the original
+`clean_data.py` dense-window detector required a perfectly unbroken run of
+non-null rows working backward from the latest data — so a single missing
+hour anywhere in 2+ years of otherwise-good history (e.g. a brief
+generation-data publication lag behind day-ahead price) would discard
+*everything* before it. Replaced with a rolling 7-day null-rate threshold to
+locate the reliable window (tolerant of isolated gaps) plus interpolation
+for small (≤3h) gaps within it — see the comments in `clean_smard()`.
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -142,12 +184,14 @@ ev-smart-charging-advisor/
 ├── notebooks/
 │   ├── 01_eda.ipynb        # Phase 2 — daily/weekly/seasonal patterns, price/renewable correlation
 │   └── figures/            # PNGs exported from the notebook
-├── models/                 # Phase 3 — trained models + backtest results (gitignored, regenerate via forecast.py)
+├── models/                 # Phase 3 — trained models + backtest figures/CSVs (weights gitignored, regenerate via forecast.py)
+├── recommendations/        # Phase 4 — latest recommendation output (small; regenerate via recommend.py)
 ├── src/
 │   ├── config.py           # paths, SMARD filter map, Ladesäulenregister URL, bbox
 │   ├── data_fetch.py       # pulls SMARD + charging station data
 │   ├── clean_data.py       # Phase 2 — trims/fixes raw data into data/processed/
-│   ├── forecast.py         # training + inference for price/renewable forecasts
+│   ├── forecast.py         # Phase 3 — training + inference for price/renewable forecasts
+│   ├── recommend.py        # Phase 4 — forecasts + scores next 48h into ranked charging windows
 │   └── app.py              # Streamlit app
 ├── requirements.txt
 └── README.md

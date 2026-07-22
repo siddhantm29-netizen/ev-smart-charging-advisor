@@ -46,8 +46,14 @@ def clean_smard(df: pd.DataFrame) -> pd.DataFrame:
       but older chunks are coarser and misaligned between filters, producing
       a long stretch where only ~1 of 12 columns is populated per row, plus a
       multi-month gap around Feb-Jul 2024 (likely a chunking-scheme change on
-      SMARD's side). We only keep the first fully-dense stretch found,
-      working backward from the most recent data.
+      SMARD's side). We keep only the reliable modern window, identified via
+      a rolling weekly null-rate (not a single missing hour anywhere in 2+
+      years of history — see below).
+    - Even within the reliable window, individual generation-mix series
+      occasionally lag price by an hour or two at the very latest edge of
+      data (e.g. day-ahead price for an hour is published before that hour's
+      actual generation mix is reported) — isolated 1-3 hour gaps like this
+      are interpolated rather than treated as a structural break.
     - The newest hours are a rolling "current chunk" that extends into the
       future; hours not yet realized/published come back as null. These
       trailing all-null rows are dropped.
@@ -62,25 +68,39 @@ def clean_smard(df: pd.DataFrame) -> pd.DataFrame:
 
     core_cols = [c for c in df.columns if c not in ("datetime", "nuclear_mw")]
 
-    # Find the last fully-dense run of rows (working from the end of history
-    # backward), so we don't hardcode a cutoff date that will go stale.
-    dense = df[core_cols].notna().all(axis=1)
-    # trim trailing not-yet-published rows first
-    last_dense_idx = dense[dense].index.max()
-    df = df.loc[:last_dense_idx]
-    dense = dense.loc[:last_dense_idx]
+    # Drop trailing rows that are still mostly unpublished. Day-ahead price
+    # is published up to a day before generation-mix actuals are reported,
+    # so the tail of "now" has a row with price but nothing else yet —
+    # "mostly null" (not "all null") is the right trim condition here.
+    mostly_null = df[core_cols].isna().mean(axis=1) > 0.5
+    last_real_idx = (~mostly_null)[::-1].idxmax()
+    df = df.loc[:last_real_idx].reset_index(drop=True)
 
-    start = last_dense_idx
-    i = last_dense_idx
-    while i > 0 and dense.iloc[i - 1]:
-        i -= 1
-    start = i
+    # Find where the data becomes reliably dense: use a trailing 7-day
+    # (168h) null rate rather than requiring a single unbroken run all the
+    # way back, so one isolated missing hour doesn't discard years of
+    # otherwise-good history. The old sparse/misaligned era has a null rate
+    # far above this; a brief single-series publication lag does not.
+    null_frac = df[core_cols].isna().mean(axis=1)
+    weekly_null_rate = null_frac.rolling(24 * 7, min_periods=24 * 7).mean()
+    still_unreliable = weekly_null_rate > 0.2
+    start = (still_unreliable[still_unreliable].index.max() + 1) if still_unreliable.any() else 0
 
-    dropped = start
-    if dropped:
+    if start:
         logger.info("Dropping %d early rows before the reliable dense window (starts %s)",
-                    dropped, df.loc[start, "datetime"])
+                    start, df.loc[start, "datetime"])
     df = df.loc[start:].reset_index(drop=True)
+
+    # Within the reliable window, fill small isolated gaps (a handful of
+    # hours at most) by interpolation; anything larger is a real problem
+    # worth dropping rather than papering over.
+    before_na = df[core_cols].isna().sum().sum()
+    df[core_cols] = df[core_cols].interpolate(method="linear", limit=3)
+    after_na = df[core_cols].isna().sum().sum()
+    if before_na:
+        logger.info("Interpolated %d isolated null cells in the dense window (%d remain, dropped as rows)",
+                    before_na - after_na, after_na)
+    df = df.dropna(subset=core_cols).reset_index(drop=True)
 
     df["nuclear_mw"] = df["nuclear_mw"].fillna(0.0)
 
