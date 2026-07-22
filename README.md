@@ -20,7 +20,7 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
   Turn forecasts into a simple ranked list of "best charging windows," balancing cost and green-ness.
 - [x] **Phase 5 — Geospatial charging map**
   Plot public charging stations (filterable by connector type, region) using Ladesäulenregister data.
-- [ ] **Phase 6 — Streamlit app**
+- [x] **Phase 6 — Streamlit app**
   Combine forecast chart, recommendation panel, and station map into one app.
 - [ ] **Phase 7 — Deployment**
   Ship it to Hugging Face Spaces (or Streamlit Community Cloud) with a scheduled data refresh.
@@ -199,13 +199,61 @@ Connector split found: **79,373 AC Type 2**, **30,051 DC fast (CCS)**, only
 connector, with CHAdeMO (Japan-originated, mainly older Nissan/Mitsubishi
 EVs) now a rounding error in new German infrastructure.
 
+## Streamlit App (Phase 6)
+
+`src/app.py` combines Phases 3-5 into one multi-page app, in English and
+German (the project's subject is the German electricity market, and the
+brief targets the German/EU energy-transition job market — so German is a
+first-class language, not an afterthought):
+
+```
+streamlit run src/app.py
+```
+
+- **Home** — session stats (station count, data range, latest data point) and an overview of the other pages.
+- **Forecast** — the next-48h price/renewable-share charts plus the Phase 3 backtest comparison table, so the model's honest track record (including where seasonal-naive beats it) is one click away, not buried in a README.
+- **Recommendation** — the `--alpha` cost/green slider, the ranked-windows chart and table, live from `recommend.py`.
+- **Charging Map** — the Phase 5 map with a real client-side region dropdown (an upgrade from the CLI's `--bundesland` flag, now that there's a UI to host it) plus the existing legend-based connector-type filter.
+
+**Architecture:** `st.navigation`/`st.Page` (Streamlit 1.36+) builds the page
+list programmatically each rerun rather than the older filename-based
+`pages/` folder convention, specifically so page titles can be computed from
+the current language — a static-filename nav couldn't do that. Each page is
+a `render(lang)` function in `src/views/`, reusing `forecast.py`,
+`recommend.py`, and `map_stations.py` directly rather than reimplementing
+any computation. `src/i18n.py` holds the translation dictionary plus
+locale-aware number/date formatting (German comma decimals, `DD.MM.` dates).
+`src/app_data.py` centralizes `st.cache_data`-wrapped loaders so every page
+shares one cache entry per dataset/model instead of each re-loading and
+re-caching separately.
+
+**Bugs found by actually driving the app** (headless Chromium + Playwright,
+screenshotting every page in both languages and checking the browser
+console — not just code review):
+- The language switcher's own label lagged one click behind the selected
+  language — `st.radio`'s label was computed from `st.session_state.lang`
+  *before* the click's new value was applied within that same script run.
+  Fixed by binding the widget directly via `key="lang"` (which Streamlit
+  syncs to session state *before* the script re-runs) and using a
+  language-neutral "🌐" label instead of translated text, sidestepping the
+  chicken-and-egg problem entirely.
+- Weekday abbreviations (`Wed`, `Thu`) stayed in English on the German
+  pages — `strftime("%a")` is locale-dependent, and relying on the system
+  having `de_DE` installed is fragile (not guaranteed on a deployment host
+  like Streamlit Community Cloud or HF Spaces even though it happened to
+  work locally). Fixed with a manual weekday-abbreviation lookup instead.
+- The home page's "Grid data range" `st.metric` truncated
+  ("2024-07-20 → 202...") since `st.metric` doesn't wrap. Switched to
+  month-precision formatting ("07.2024 → 07.2026"), which is all that stat
+  needs anyway and fits comfortably.
+
 ## Tech Stack
 
 | Layer | Tool |
 |---|---|
 | Data wrangling | pandas, numpy |
 | Forecasting | XGBoost, Prophet |
-| Geospatial | folium / plotly |
+| Geospatial | Plotly (`Scattermap`) |
 | App | Streamlit |
 | Deployment | Hugging Face Spaces |
 
@@ -228,7 +276,14 @@ ev-smart-charging-advisor/
 │   ├── forecast.py         # Phase 3 — training + inference for price/renewable forecasts
 │   ├── recommend.py        # Phase 4 — forecasts + scores next 48h into ranked charging windows
 │   ├── map_stations.py     # Phase 5 — interactive charging-station map
-│   └── app.py              # Streamlit app
+│   ├── i18n.py             # Phase 6 — EN/DE translations + locale-aware formatting
+│   ├── app_data.py         # Phase 6 — shared st.cache_data loaders for the app views
+│   ├── app.py              # Phase 6 — Streamlit entry point (language switch + navigation)
+│   └── views/              # Phase 6 — one render(lang) function per page
+│       ├── home.py
+│       ├── forecast.py
+│       ├── recommendation.py
+│       └── charging_map.py
 ├── maps/                   # Phase 5 — generated HTML maps; regenerate via map_stations.py
 ├── requirements.txt
 └── README.md

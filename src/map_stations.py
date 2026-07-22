@@ -57,7 +57,11 @@ def classify_connector(df: pd.DataFrame) -> pd.Series:
     return category
 
 
-def build_map(df: pd.DataFrame, region: str | None = None) -> go.Figure:
+def build_map(df: pd.DataFrame, region: str | None = None, category_labels: dict | None = None) -> go.Figure:
+    """category_labels optionally maps each CONNECTOR_CATEGORIES entry to a
+    display label (e.g. a translation) — legend/trace names use it if given,
+    the category key itself otherwise."""
+    labels = category_labels or {c: c for c in CONNECTOR_CATEGORIES}
     if region:
         df = df[df["Bundesland"] == region]
         if df.empty:
@@ -81,7 +85,7 @@ def build_map(df: pd.DataFrame, region: str | None = None) -> go.Figure:
             lat=sub["Breitengrad"], lon=sub["Längengrad"],
             mode="markers",
             marker=dict(size=5, color=CONNECTOR_COLORS[category], opacity=0.65),
-            name=f"{category} ({len(sub):,})",
+            name=f"{labels[category]} ({len(sub):,})",
             text=hover,
             hoverinfo="text",
         ))
@@ -92,7 +96,7 @@ def build_map(df: pd.DataFrame, region: str | None = None) -> go.Figure:
                   zoom=7.5 if region else 5.2),
         margin=dict(l=0, r=0, t=40, b=0),
         title=f"Public EV charging stations — {region or 'Germany'} ({len(df):,})",
-        legend=dict(title=dict(text="Connector type (click to filter)")),
+        legend=dict(title=dict(text=labels.get("_legend_title", "Connector type (click to filter)"))),
         height=750,
     )
     return fig
