@@ -17,8 +17,7 @@ xgboost>=2.0
 prophet>=1.1
 
 # Phase 5 — geospatial
-folium>=0.15
+plotly>=5.18
 
 # Phase 6 — app
 streamlit>=1.30
-plotly>=5.18

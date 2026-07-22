@@ -18,7 +18,7 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
   Train a model (starting with XGBoost, comparing against Prophet) to forecast next 24-48h electricity price and renewable share.
 - [x] **Phase 4 — Recommendation engine**
   Turn forecasts into a simple ranked list of "best charging windows," balancing cost and green-ness.
-- [ ] **Phase 5 — Geospatial charging map**
+- [x] **Phase 5 — Geospatial charging map**
   Plot public charging stations (filterable by connector type, region) using Ladesäulenregister data.
 - [ ] **Phase 6 — Streamlit app**
   Combine forecast chart, recommendation panel, and station map into one app.
@@ -66,6 +66,7 @@ Learned by actually running `data_fetch.py` against the live APIs (as opposed to
 - **SMARD's `hour`-resolution chunks aren't uniform across history.** Recent chunks are consistent 168-hour (1-week) windows that align across all filters; the newest chunk is a rolling window straddling "now," so its tail hours come back as `null` until published. Older chunks (pre-mid-2024) are coarser and misaligned between filters, and there's a real multi-month gap in coverage around Feb–Jul 2024. `src/clean_data.py` trims to the last fully-dense stretch rather than trying to reconcile the older, sparse history.
 - **`nuclear_mw` (filter 1224) is a dead series.** Germany's nuclear phase-out completed in April 2023, and the filter stopped receiving new chunks in Jan 2024. `clean_data.py` fills it with `0` rather than leaving it null or dropping it, since zero is the real value.
 - Negative day-ahead prices are real and fairly common (~6% of hours in the current dataset) — that's the market working as intended during renewable oversupply, not a data error.
+- One station (Wegberg, NRW) has an implausible latitude (55.12° — that's off the North Sea coast near Denmark, not western NRW near the Dutch border where Wegberg actually is) — a typo in the source data. Left as-is (1 row out of 109,457, not worth filtering), but a reminder the source isn't perfectly clean.
 
 ## Forecasting Model (Phase 3)
 
@@ -164,6 +165,40 @@ generation-data publication lag behind day-ahead price) would discard
 locate the reliable window (tolerant of isolated gaps) plus interpolation
 for small (≤3h) gaps within it — see the comments in `clean_smard()`.
 
+## Geospatial Charging Map (Phase 5)
+
+`src/map_stations.py` plots all 109k+ public charging stations with Plotly's
+`Scattermap` (MapLibre-based — no Mapbox token needed, unlike the now
+deprecated `Scattermapbox`):
+
+- **Filterable by connector type via the legend** — stations are grouped
+  into 4 traces (DC fast CCS, DC fast CHAdeMO, AC Type 2, Other), colored
+  consistently, and each is toggled on/off by clicking its legend entry.
+  Category is picked from the *best* connector present anywhere on the
+  station (a station can list up to 6 connector slots, and a slot itself is
+  often multiple standards) — DC fast if it has one, else AC Type 2.
+- **Filterable by region via `--bundesland`** — generates a map scoped and
+  zoomed to one German state rather than filtering client-side, keeping the
+  interaction model simple (a real dropdown-driven client-side region filter
+  is a natural Streamlit-app upgrade for Phase 6, once there's a UI to host
+  the control).
+
+```
+python src/map_stations.py                     # maps/charging_stations_germany.html (109,457 stations, ~15MB)
+python src/map_stations.py --bundesland Bayern  # maps/charging_stations_bayern.html
+python src/map_stations.py --max-stations 3000  # quick test / smaller file
+```
+
+Chose Plotly over the originally-planned folium: `Scattermap`'s WebGL
+rendering handles 100k+ points comfortably, it needs no separate
+`streamlit-folium` dependency to embed in the Phase 6 app (`st.plotly_chart`
+works natively), and it needs no API token.
+
+Connector split found: **79,373 AC Type 2**, **30,051 DC fast (CCS)**, only
+**27 CHAdeMO** — matches the EU's push toward CCS as the standard DC fast
+connector, with CHAdeMO (Japan-originated, mainly older Nissan/Mitsubishi
+EVs) now a rounding error in new German infrastructure.
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -192,7 +227,9 @@ ev-smart-charging-advisor/
 │   ├── clean_data.py       # Phase 2 — trims/fixes raw data into data/processed/
 │   ├── forecast.py         # Phase 3 — training + inference for price/renewable forecasts
 │   ├── recommend.py        # Phase 4 — forecasts + scores next 48h into ranked charging windows
+│   ├── map_stations.py     # Phase 5 — interactive charging-station map
 │   └── app.py              # Streamlit app
+├── maps/                   # Phase 5 — generated HTML maps; regenerate via map_stations.py
 ├── requirements.txt
 └── README.md
 ```
