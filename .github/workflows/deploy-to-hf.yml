@@ -19,6 +19,18 @@ jobs:
         with:
           fetch-depth: 0  # HF's git backend rejects shallow pushes ("shallow update not allowed")
 
+      - name: Convert large files to Git LFS for the HF push
+        # HF Spaces hard-rejects any non-LFS file over 10 MiB (GitHub's own
+        # limit is 100MB, so these are fine there — this conversion only
+        # affects the disposable checkout in this job, not the real GitHub
+        # history). `git lfs migrate import` rewrites the files to LFS
+        # pointers throughout this checkout's history rather than just the
+        # tip commit, so the mirrored Space repo is self-consistent if HF
+        # ever needs an older commit.
+        run: |
+          git lfs install
+          git lfs migrate import --include="data/processed/charging_stations_clean.csv,data/raw/charging_stations_*.csv,maps/*.html"
+
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
