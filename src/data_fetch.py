@@ -12,6 +12,7 @@ Usage:
     python src/data_fetch.py --smard --stations
     python src/data_fetch.py --stations --bbox 9.5,53.3,10.4,53.8   # Hamburg area only, for a quick test
     python src/data_fetch.py --stations --max-stations 500          # cap record count while testing
+    python src/data_fetch.py --smard --lookback-chunks 3 --merge    # incremental refresh (see merge_with_existing)
 
 Both APIs are free and don't require an API key.
 """
@@ -19,8 +20,10 @@ Both APIs are free and don't require an API key.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -199,6 +202,34 @@ def save_dataframe(df: pd.DataFrame, name: str, directory: Path = RAW_DATA_DIR) 
     return path
 
 
+def merge_with_existing(df: pd.DataFrame, name: str, directory: Path = RAW_DATA_DIR) -> pd.DataFrame:
+    """
+    Merge a freshly-fetched frame (typically a small --lookback-chunks pull)
+    with the existing dated raw file for `name`, so a scheduled refresh can
+    fetch just the last few weeks instead of re-pulling all of history every
+    time. Fresh values win on overlapping timestamps (e.g. a hitherto-null
+    generation-mix figure that's since been published). The superseded old
+    file is removed so data/raw/ doesn't accumulate a dated snapshot per run.
+    """
+    matches = glob.glob(str(directory / f"{name}_*.csv"))
+    if not matches:
+        return df
+    existing_path = Path(max(matches, key=os.path.getmtime))
+    existing = pd.read_csv(existing_path, parse_dates=["datetime"])
+    df = df.copy()
+    df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+    merged = (
+        pd.concat([existing, df], ignore_index=True)
+        .sort_values("datetime")
+        .drop_duplicates(subset="datetime", keep="last")
+        .reset_index(drop=True)
+    )
+    existing_path.unlink()
+    logger.info("Merged %d fresh rows into %d existing rows from %s (%d total after dedup)",
+                len(df), len(existing), existing_path.name, len(merged))
+    return merged
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--smard", action="store_true", help="Fetch SMARD electricity market data")
@@ -210,6 +241,9 @@ def main() -> None:
                               "Defaults to all of Germany.")
     parser.add_argument("--max-stations", type=int, default=None,
                          help="Cap the number of charging-station records fetched (handy for a quick test run).")
+    parser.add_argument("--merge", action="store_true",
+                         help="Merge the fetched SMARD data into the existing raw file instead of treating it as "
+                              "the whole history — use with a small --lookback-chunks for a fast incremental refresh.")
     args = parser.parse_args()
 
     if not args.smard and not args.stations:
@@ -218,6 +252,8 @@ def main() -> None:
 
     if args.smard:
         df = fetch_smard_all(lookback_chunks=args.lookback_chunks)
+        if args.merge:
+            df = merge_with_existing(df, "smard_market_data")
         save_dataframe(df, "smard_market_data")
 
     if args.stations:

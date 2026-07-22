@@ -1,0 +1,14 @@
+# Extra dependencies for one-off dev tasks only — not needed to run the app
+# or the automated data-refresh pipeline (see requirements.txt for those).
+-r requirements.txt
+
+# Rebuilding notebooks/01_eda.ipynb
+jupyter>=1.0
+nbformat>=5.9
+nbconvert>=7.16
+ipykernel>=6.29
+
+# Reproducing the Phase 3 Prophet backtest (python src/forecast.py --target ...)
+# Heavy (pulls in cmdstan) and not used by anything else — deliberately kept
+# out of the deploy/CI requirements.txt.
+prophet>=1.1

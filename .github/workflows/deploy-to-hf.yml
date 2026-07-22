@@ -1,0 +1,25 @@
+name: Deploy to Hugging Face Spaces
+
+# Mirrors main onto the HF Space's own git repo on every push, which
+# triggers the Space to rebuild and restart. Runs after the scheduled data
+# refresh (below) commits new data, so a fresh recommendation reaches the
+# live app automatically without a separate manual step.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git remote add space "https://sid009991:${HF_TOKEN}@huggingface.co/spaces/sid009991/ev-smart-charging-advisor"
+          git push --force space HEAD:main

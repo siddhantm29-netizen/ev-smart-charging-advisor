@@ -8,10 +8,12 @@ env/
 # Environment / secrets
 .env
 
-# Models — figures/CSVs/metrics are tracked (small, human-readable); the
-# serialized model weights are regenerable via `python src/forecast.py` and
-# large enough (~3MB each) to skip
-models/xgboost_*.json
+# Models — figures/CSVs/metrics are tracked, and so are the XGBoost weights
+# (~3MB each) since the deployed app loads them directly at runtime
+# (recommend.py has no code path that retrains on the fly). Prophet's
+# serialized models are NOT loaded by the app (only used for the one-off
+# Phase 3 backtest comparison, whose results are already saved as metrics
+# JSON/figures), so those stay ignored.
 models/prophet_*.json
 
 # OS / editor

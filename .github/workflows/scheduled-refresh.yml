@@ -1,0 +1,54 @@
+name: Scheduled Data Refresh
+
+# Phase 7's "scheduled data refresh": pulls the last few weeks of SMARD data
+# (not a full 2-year re-fetch — see data_fetch.py's --merge flag), re-cleans
+# it, and regenerates the live 48h recommendation, then commits the result.
+# That push to main triggers deploy-to-hf.yml, so a fresh recommendation
+# reaches the live Space automatically. Does NOT retrain the XGBoost/Prophet
+# models themselves — that's a deliberate, manual step
+# (python src/forecast.py --target ...) rather than something to silently
+# re-run on a schedule.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"  # daily, 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Refresh SMARD data (incremental, last 3 weeks merged into existing history)
+        run: python src/data_fetch.py --smard --lookback-chunks 3 --merge
+
+      - name: Clean data
+        run: python src/clean_data.py --smard
+
+      - name: Regenerate the live recommendation
+        run: python src/recommend.py
+
+      - name: Commit and push if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A -- data/raw data/processed recommendations
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Scheduled data refresh $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi

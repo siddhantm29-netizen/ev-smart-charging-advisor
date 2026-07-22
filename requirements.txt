@@ -1,20 +1,20 @@
+# Runtime requirements for the deployed app and the automated data-refresh
+# pipeline (src/data_fetch.py, clean_data.py, recommend.py, app.py). For
+# one-off dev tasks (rebuilding the EDA notebook, reproducing the Phase 3
+# Prophet backtest), see requirements-dev.txt.
+
 # Phase 1 — data collection
 requests>=2.31
 pandas>=2.0
 numpy>=1.24
 python-dateutil>=2.8
 
-# Phase 2 — exploratory data analysis
+# Phase 2/3 — cleaning, forecasting, and the recommendation engine's own
+# matplotlib output (recommend.py's CLI plot; the Streamlit app's charts are
+# Plotly and don't need this, but the CLI does)
 matplotlib>=3.8
-jupyter>=1.0
-nbformat>=5.9
-nbconvert>=7.16
-ipykernel>=6.29
-
-# Phase 3 — forecasting
 scikit-learn>=1.3
 xgboost>=2.0
-prophet>=1.1
 
 # Phase 5 — geospatial
 plotly>=5.18

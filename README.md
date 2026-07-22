@@ -1,3 +1,15 @@
+---
+title: EV Smart-Charging Advisor
+emoji: 🔌
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: "1.60.0"
+app_file: src/app.py
+pinned: false
+license: mit
+---
+
 # EV Smart-Charging Advisor 🔌
 
 Predicts the cheapest and greenest times to charge an EV in Germany, using real grid data — then recommends optimal charging windows and maps nearby public charging stations.
@@ -22,7 +34,7 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
   Plot public charging stations (filterable by connector type, region) using Ladesäulenregister data.
 - [x] **Phase 6 — Streamlit app**
   Combine forecast chart, recommendation panel, and station map into one app.
-- [ ] **Phase 7 — Deployment**
+- [x] **Phase 7 — Deployment**
   Ship it to Hugging Face Spaces (or Streamlit Community Cloud) with a scheduled data refresh.
 - [ ] **Phase 8 — Polish**
   Write-up, screenshots, and a clean portfolio-ready v1.0.
@@ -247,6 +259,48 @@ console — not just code review):
   month-precision formatting ("07.2024 → 07.2026"), which is all that stat
   needs anyway and fits comfortably.
 
+## Deployment (Phase 7)
+
+Live at: [huggingface.co/spaces/sid009991/ev-smart-charging-advisor](https://huggingface.co/spaces/sid009991/ev-smart-charging-advisor)
+
+Two GitHub Actions handle deployment and keeping the live app current,
+without either needing a manual step after the initial setup:
+
+- **`.github/workflows/deploy-to-hf.yml`** — on every push to `main`,
+  force-pushes the repo to the Hugging Face Space's own git repo, which
+  triggers HF to rebuild and restart the app. The Space is configured via
+  the YAML frontmatter at the top of this README (`sdk: streamlit`,
+  `app_file: src/app.py` — HF Spaces reads that block directly from the
+  repo's README).
+- **`.github/workflows/scheduled-refresh.yml`** — runs daily (05:00 UTC):
+  pulls the last 3 weeks of SMARD data (`data_fetch.py --merge`, not a full
+  2-year re-fetch), re-cleans it, regenerates the live 48h recommendation,
+  and commits the result if anything changed. That commit lands on `main`,
+  which triggers the deploy workflow above — so a fresh recommendation
+  reaches the live app automatically, with no human in the loop.
+
+**Deliberately not automated:** retraining the XGBoost/Prophet models
+(`python src/forecast.py --target ...`) stays a manual step. Silently
+retraining on a schedule would mean the live app's model could drift without
+anyone reviewing the new backtest numbers first — given Phase 3's finding
+that the "obvious" choice (XGBoost) doesn't always beat a naive benchmark,
+that review step matters more than the convenience of full automation.
+
+**A bug this caught before it shipped:** `models/xgboost_*.json` — the
+actual trained weights `recommend.py` loads at runtime — were gitignored
+alongside the (correctly-ignored) larger Prophet model files. The app would
+have deployed successfully and then crashed the moment anyone opened the
+Forecast or Recommendation page. Caught by checking what the deployed app
+actually needs on disk before wiring up the deploy workflow, not by trial and
+error against the live Space.
+
+**Setup required outside the repo** (a one-time thing, already done for this
+project): create the HF Space (SDK: Streamlit), generate a HF token with
+write access, and add it as the `HF_TOKEN` secret in the GitHub repo's
+Settings → Secrets and variables → Actions. Neither step has a CLI/API path
+that doesn't require the account owner's login, so there's no way to script
+around doing them once by hand.
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -261,13 +315,16 @@ console — not just code review):
 
 ```
 ev-smart-charging-advisor/
+├── .github/workflows/
+│   ├── deploy-to-hf.yml     # Phase 7 — mirrors main to the HF Space on every push
+│   └── scheduled-refresh.yml # Phase 7 — daily data refresh + recommendation regen
 ├── data/
 │   ├── raw/                # untouched downloads from SMARD & Ladesäulenregister
 │   └── processed/          # cleaned, merged datasets
 ├── notebooks/
 │   ├── 01_eda.ipynb        # Phase 2 — daily/weekly/seasonal patterns, price/renewable correlation
 │   └── figures/            # PNGs exported from the notebook
-├── models/                 # Phase 3 — trained models + backtest figures/CSVs (weights gitignored, regenerate via forecast.py)
+├── models/                 # Phase 3 — trained models + backtest figures/CSVs (XGBoost weights tracked; Prophet's are gitignored, regenerate via forecast.py)
 ├── recommendations/        # Phase 4 — latest recommendation output (small; regenerate via recommend.py)
 ├── src/
 │   ├── config.py           # paths, SMARD filter map, Ladesäulenregister URL, bbox
@@ -285,20 +342,31 @@ ev-smart-charging-advisor/
 │       ├── recommendation.py
 │       └── charging_map.py
 ├── maps/                   # Phase 5 — generated HTML maps; regenerate via map_stations.py
-├── requirements.txt
+├── requirements.txt        # deploy/CI runtime deps
+├── requirements-dev.txt    # + notebook tooling and Prophet, for one-off local dev tasks
 └── README.md
 ```
 
 ## Getting Started
 
 ```bash
-git clone https://github.com/<your-username>/ev-smart-charging-advisor.git
+git clone https://github.com/siddhantm29-netizen/ev-smart-charging-advisor.git
 cd ev-smart-charging-advisor
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt                   # + requirements-dev.txt for notebook/Prophet work
+
+streamlit run src/app.py                          # the app — data/models already in the repo, nothing to fetch first
 ```
 
-(`src/data_fetch.py`, `requirements.txt`, and the rest come in the next phase.)
+To regenerate anything from scratch instead of using what's committed:
+
+```bash
+python src/data_fetch.py --smard --stations   # pull fresh raw data (Phase 1)
+python src/clean_data.py --smard --stations   # clean it (Phase 2)
+python src/forecast.py --target price         # train + backtest (Phase 3; needs requirements-dev.txt for Prophet)
+python src/recommend.py                       # score the next 48h (Phase 4)
+python src/map_stations.py                    # rebuild the station map (Phase 5)
+```
 
 ## License
 
