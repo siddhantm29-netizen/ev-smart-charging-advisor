@@ -29,7 +29,12 @@ jobs:
         # ever needs an older commit.
         run: |
           git lfs install
-          git lfs migrate import --include="data/processed/charging_stations_clean.csv,data/raw/charging_stations_*.csv,maps/*.html"
+          # --everything: without an explicit ref, migrate import computes its
+          # commit range relative to remote-tracking refs, which is empty
+          # right after a fresh checkout (HEAD == origin/main) — it silently
+          # rewrites nothing ("Rewriting commits: 100% (0/0)") rather than
+          # erroring, which is what actually happened on the first attempt.
+          git lfs migrate import --everything --include="data/processed/charging_stations_clean.csv,data/raw/charging_stations_*.csv,maps/*.html"
 
       - name: Push to Hugging Face Space
         env:
