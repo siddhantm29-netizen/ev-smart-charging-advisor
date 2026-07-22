@@ -19,14 +19,18 @@ jobs:
         with:
           fetch-depth: 0  # HF's git backend rejects shallow pushes ("shallow update not allowed")
 
-      - name: Convert large files to Git LFS for the HF push
-        # HF Spaces hard-rejects any non-LFS file over 10 MiB (GitHub's own
-        # limit is 100MB, so these are fine there — this conversion only
-        # affects the disposable checkout in this job, not the real GitHub
-        # history). `git lfs migrate import` rewrites the files to LFS
-        # pointers throughout this checkout's history rather than just the
-        # tip commit, so the mirrored Space repo is self-consistent if HF
-        # ever needs an older commit.
+      - name: Convert large/binary files to Git LFS for the HF push
+        # HF Spaces hard-rejects (a) any non-LFS file over 10 MiB — GitHub's
+        # own limit is 100MB, so these are fine there — and, it turns out,
+        # (b) *any* binary file at all pushed as a plain git blob, size
+        # notwithstanding (found by actually trying: the >10MB CSVs/HTML
+        # tripped (a) first, then every PNG in the repo tripped (b) on the
+        # next attempt). This conversion only affects the disposable
+        # checkout in this job, not the real GitHub history. `git lfs
+        # migrate import` rewrites matching files to LFS pointers
+        # throughout history rather than just the tip commit, so the
+        # mirrored Space repo is self-consistent if HF ever needs an older
+        # commit.
         run: |
           git lfs install
           # --everything: without an explicit ref, migrate import computes its
@@ -34,7 +38,7 @@ jobs:
           # right after a fresh checkout (HEAD == origin/main) — it silently
           # rewrites nothing ("Rewriting commits: 100% (0/0)") rather than
           # erroring, which is what actually happened on the first attempt.
-          git lfs migrate import --everything --include="data/processed/charging_stations_clean.csv,data/raw/charging_stations_*.csv,maps/*.html"
+          git lfs migrate import --everything --include="data/processed/charging_stations_clean.csv,data/raw/charging_stations_*.csv,maps/*.html,*.png"
 
       - name: Push to Hugging Face Space
         env:
