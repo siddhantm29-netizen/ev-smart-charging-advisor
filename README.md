@@ -18,7 +18,8 @@ Predicts the cheapest and greenest times to charge an EV in Germany, using real 
 
 Germany's electricity price and renewable share swing a lot throughout the day, depending on wind, solar, and demand. This project pulls real historical grid data, forecasts near-term price and renewable share, and turns that into a plain "charge now / wait until X" recommendation — plus a map of public charging stations. It's meant to be an actual usable tool, not just a notebook of charts.
 
-**Status:** 🚧 In progress — see roadmap below for current phase.
+### 🚀 Live Application
+**[Try the Live App Here](https://ev-smart-charging-advisor.streamlit.app/)**
 
 ## Roadmap
 
@@ -35,29 +36,25 @@ Germany's electricity price and renewable share swing a lot throughout the day, 
 - [x] **Phase 6 — Streamlit app**
   Combine forecast chart, recommendation panel, and station map into one app.
 - [x] **Phase 7 — Deployment**
-  Ship it to Hugging Face Spaces (or Streamlit Community Cloud) with a scheduled data refresh.
-- [ ] **Phase 8 — Polish**
-  Write-up, screenshots, and a clean portfolio-ready v1.0.
+  Ship it to Streamlit Community Cloud with a scheduled data refresh.
+- [x] **Phase 8 — Polish**
+  Write-up and a clean portfolio-ready v1.0.
+
+---
 
 ## Getting the Data
 
 Both data sources below are free, public, and don't require an account.
 
 ### 1. Electricity market data — SMARD
-
-SMARD (Strommarktdaten) is the Bundesnetzagentur's official electricity market data platform — hourly generation by source, demand, and day-ahead prices, going back several years. The data is freely available for public use, and data from the Market data visuals section is licensed under Creative Commons Attribution 4.0 International.
+SMARD (Strommarktdaten) is the Bundesnetzagentur's official electricity market data platform — hourly generation by source, demand, and day-ahead prices, going back several years. The data is freely available for public use, and data from the Market data visuals section is licensed under **Creative Commons Attribution 4.0 International (CC BY 4.0)**.
 
 Two ways to pull it:
 
 - **Manual export (good for a first pass):** [smard.de/en/downloadcenter/download-market-data](https://www.smard.de/en/downloadcenter/download-market-data) — pick a date range (up to 2 years per file) and download as CSV or XLSX.
-- **API (better for automation):** the underlying endpoint pattern is:
-  ```
-  https://www.smard.de/app/chart_data/{filter}/{region}/{filter}_{region}_{resolution}_{timestamp}.json
-  ```
-  Community-documented at [smard.api.bund.dev](https://smard.api.bund.dev). There's also a maintained Python wrapper (`deutschland` package) if you'd rather not hit raw endpoints:
+- **API (better for automation):** Community-documented at [smard.api.bund.dev](https://smard.api.bund.dev)[cite: 2]. There's also a maintained Python wrapper (`deutschland` package) if you'd rather not hit raw endpoints:
   ```bash
-  pip install git+https://github.com/bundesAPI/deutschland.git
-  ```
+  pip install git+[https://github.com/bundesAPI/deutschland.git](https://github.com/bundesAPI/deutschland.git)
 
 Attribution required if published: **"Bundesnetzagentur | SMARD.de"**.
 
@@ -261,23 +258,9 @@ console — not just code review):
 
 ## Deployment (Phase 7)
 
-Live at: [huggingface.co/spaces/sid009991/ev-smart-charging-advisor](https://huggingface.co/spaces/sid009991/ev-smart-charging-advisor)
+Live at: https://ev-smart-charging-advisor.streamlit.app/
 
-Two GitHub Actions handle deployment and keeping the live app current,
-without either needing a manual step after the initial setup:
-
-- **`.github/workflows/deploy-to-hf.yml`** — on every push to `main`,
-  force-pushes the repo to the Hugging Face Space's own git repo, which
-  triggers HF to rebuild and restart the app. The Space is configured via
-  the YAML frontmatter at the top of this README (`sdk: streamlit`,
-  `app_file: src/app.py` — HF Spaces reads that block directly from the
-  repo's README).
-- **`.github/workflows/scheduled-refresh.yml`** — runs daily (05:00 UTC):
-  pulls the last 3 weeks of SMARD data (`data_fetch.py --merge`, not a full
-  2-year re-fetch), re-cleans it, regenerates the live 48h recommendation,
-  and commits the result if anything changed. That commit lands on `main`,
-  which triggers the deploy workflow above — so a fresh recommendation
-  reaches the live app automatically, with no human in the loop.
+The application is deployed securely on Streamlit Community Cloud, relying on GitHub Actions to keep the underlying data fresh:.github/workflows/scheduled-refresh.yml — runs daily (05:00 UTC): pulls the last 3 weeks of SMARD data, re-cleans it, regenerates the live 48h recommendation, and commits the result if anything changed. That commit lands on main, which seamlessly updates the data visualized in the live Streamlit app.  
 
 **Deliberately not automated:** retraining the XGBoost/Prophet models
 (`python src/forecast.py --target ...`) stays a manual step. Silently
@@ -309,14 +292,13 @@ around doing them once by hand.
 | Forecasting | XGBoost, Prophet |
 | Geospatial | Plotly (`Scattermap`) |
 | App | Streamlit |
-| Deployment | Hugging Face Spaces |
+| Deployment | Streamlit Community Cloud |
 
 ## Project Structure
 
 ```
 ev-smart-charging-advisor/
 ├── .github/workflows/
-│   ├── deploy-to-hf.yml     # Phase 7 — mirrors main to the HF Space on every push
 │   └── scheduled-refresh.yml # Phase 7 — daily data refresh + recommendation regen
 ├── data/
 │   ├── raw/                # untouched downloads from SMARD & Ladesäulenregister
@@ -350,7 +332,7 @@ ev-smart-charging-advisor/
 ## Getting Started
 
 ```bash
-git clone https://github.com/siddhantm29-netizen/ev-smart-charging-advisor.git
+git clone [https://github.com/siddhantm29-netizen/ev-smart-charging-advisor.git](https://github.com/siddhantm29-netizen/ev-smart-charging-advisor.git)
 cd ev-smart-charging-advisor
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt                   # + requirements-dev.txt for notebook/Prophet work
