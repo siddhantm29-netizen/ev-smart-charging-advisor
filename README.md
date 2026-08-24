@@ -277,12 +277,6 @@ Forecast or Recommendation page. Caught by checking what the deployed app
 actually needs on disk before wiring up the deploy workflow, not by trial and
 error against the live Space.
 
-**Setup required outside the repo** (a one-time thing, already done for this
-project): create the HF Space (SDK: Streamlit), generate a HF token with
-write access, and add it as the `HF_TOKEN` secret in the GitHub repo's
-Settings → Secrets and variables → Actions. Neither step has a CLI/API path
-that doesn't require the account owner's login, so there's no way to script
-around doing them once by hand.
 
 ## Tech Stack
 
