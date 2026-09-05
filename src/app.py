@@ -1,8 +1,6 @@
 """
-app.py — Phase 6 of the roadmap: Streamlit app combining the forecast chart,
-recommendation panel, and charging-station map into one multi-page app, with
-a German/English language switch (this project's subject is the German
-electricity market, so both are first-class rather than English-only).
+app.py — Streamlit multi-page app combining the forecast chart,
+recommendation panel, and charging-station map, with an EN/DE language switch.
 
 Run:
     streamlit run src/app.py
@@ -21,14 +19,8 @@ if "lang" not in st.session_state:
     st.session_state.lang = "en"
 
 with st.sidebar:
-    # key="lang" binds directly to st.session_state.lang, which Streamlit
-    # syncs *before* the script re-runs on a click — unlike reading
-    # st.session_state.lang to build this widget's own label (or passing
-    # index=) and assigning the return value back afterwards, which lags
-    # one click behind (the label/other language-dependent bits below would
-    # render using the *previous* language on the very rerun where the user
-    # just switched). The "🌐" label sidesteps needing translation at all
-    # for the one piece of UI that can't know the language yet.
+    # key="lang" binds directly to st.session_state so the language switch
+    # takes effect on the same rerun it's clicked (no one-click lag).
     st.radio(
         "🌐",
         options=list(LANGUAGES.keys()),
@@ -40,10 +32,9 @@ with st.sidebar:
 lang = st.session_state.lang
 
 pages = [
-    st.Page(lambda: home.render(lang), title=t("nav_home", lang), icon="🏠", url_path="home", default=True),
-    st.Page(lambda: forecast.render(lang), title=t("nav_forecast", lang), icon="📈", url_path="forecast"),
-    st.Page(lambda: recommendation.render(lang), title=t("nav_recommendation", lang), icon="💡", url_path="recommendation"),
-    st.Page(lambda: charging_map.render(lang), title=t("nav_map", lang), icon="🗺️", url_path="map"),
+    st.Page(lambda: home.render(lang),           title=t("nav_home", lang),           icon="🏠",  url_path="home", default=True),
+    st.Page(lambda: forecast.render(lang),        title=t("nav_forecast", lang),        icon="📈",  url_path="forecast"),
+    st.Page(lambda: recommendation.render(lang),  title=t("nav_recommendation", lang),  icon="💡",  url_path="recommendation"),
+    st.Page(lambda: charging_map.render(lang),    title=t("nav_map", lang),             icon="🗺️", url_path="map"),
 ]
-nav = st.navigation(pages)
-nav.run()
+st.navigation(pages).run()

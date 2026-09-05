@@ -13,24 +13,23 @@ def render(lang: str) -> None:
     st.caption(t("app_tagline", lang))
     st.write(t("home_intro", lang))
 
-    smard_df = get_smard_df()
+    smard_df    = get_smard_df()
     stations_df = get_stations_df()
 
     st.subheader(t("home_stats_heading", lang))
     c1, c2, c3 = st.columns(3)
-    c1.metric(t("home_stat_stations", lang), f"{len(stations_df):,}")
-    # Month precision (not full dates) so this fits st.metric's width, which
-    # doesn't wrap — "2024-07-20 → 2026-07-22" was getting clipped.
-    month_fmt = "%m.%Y" if lang == "de" else "%Y-%m"
+    # Month precision so the range fits st.metric without wrapping.
+    month_fmt  = "%m.%Y" if lang == "de" else "%Y-%m"
     date_range = f"{smard_df.index.min():{month_fmt}} → {smard_df.index.max():{month_fmt}}"
-    c2.metric(t("home_stat_data_range", lang), date_range)
-    c3.metric(t("home_stat_last_updated", lang), fmt_datetime(smard_df.index.max(), lang, with_weekday=False))
+    c1.metric(t("home_stat_stations",    lang), f"{len(stations_df):,}")
+    c2.metric(t("home_stat_data_range",  lang), date_range)
+    c3.metric(t("home_stat_last_updated", lang),
+              fmt_datetime(smard_df.index.max(), lang, with_weekday=False))
 
     st.divider()
     st.subheader(t("home_pages_heading", lang))
-    st.markdown("- " + t("home_page_forecast", lang))
-    st.markdown("- " + t("home_page_recommendation", lang))
-    st.markdown("- " + t("home_page_map", lang))
+    for key in ("home_page_forecast", "home_page_recommendation", "home_page_map"):
+        st.markdown("- " + t(key, lang))
 
     st.divider()
     st.caption(t("home_attribution", lang))

@@ -1,7 +1,6 @@
 """
-app_data.py — cached data/model access shared by the Streamlit views
-(Phase 6). Centralized so every page hits the same cache entries instead of
-each view re-loading (and re-caching separately) the same files.
+app_data.py — cached data/model access shared by all Streamlit views.
+Centralising here ensures every page hits the same cache entries.
 """
 
 from __future__ import annotations
@@ -25,9 +24,8 @@ def get_stations_df():
 
 @st.cache_data(ttl=3600)
 def get_forecast():
-    """Returns (forecast_df, origin). Cached since it involves loading two
-    XGBoost models and scoring 48 pooled feature rows — cheap, but no
-    reason to redo it on every widget interaction within the same hour."""
+    """Returns (forecast_df, origin). Cached — loading two XGBoost models and
+    scoring 48 feature rows is cheap but pointless to repeat within the hour."""
     return recommend.build_forecast()
 
 

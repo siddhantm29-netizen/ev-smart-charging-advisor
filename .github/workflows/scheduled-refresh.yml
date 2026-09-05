@@ -1,18 +1,21 @@
 name: Scheduled Data Refresh
 
-# Phase 7's "scheduled data refresh": pulls the last few weeks of SMARD data
-# (not a full 2-year re-fetch — see data_fetch.py's --merge flag), re-cleans
-# it, and regenerates the live 48h recommendation, then commits the result.
-# That push to main triggers deploy-to-hf.yml, so a fresh recommendation
-# reaches the live Space automatically. Does NOT retrain the XGBoost/Prophet
-# models themselves — that's a deliberate, manual step
-# (python src/forecast.py --target ...) rather than something to silently
-# re-run on a schedule.
+# Pulls the last 3 weeks of SMARD data (incremental merge, not a full
+# re-fetch), re-cleans, regenerates the live 48h recommendation, and
+# commits the result. Does NOT retrain the XGBoost/Prophet models —
+# that's a deliberate manual step (python src/forecast.py --target ...).
 
 on:
   schedule:
-    - cron: "0 5 * * *"  # daily, 05:00 UTC
+    - cron: "0 5 * * *"   # daily at 05:00 UTC
   workflow_dispatch:
+
+# Cancel any in-progress run for the same branch before starting a new one.
+# Prevents non-fast-forward push conflicts when the workflow is triggered
+# manually while a scheduled run is already in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -21,13 +24,12 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
