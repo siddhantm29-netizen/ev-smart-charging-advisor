@@ -61,17 +61,15 @@ def clean_smard(df: pd.DataFrame) -> pd.DataFrame:
     last_real_idx = (~mostly_null)[::-1].idxmax()
     df = df.loc[:last_real_idx].reset_index(drop=True)
 
-    # Find the start of the reliably dense window via a 7-day trailing null rate.
-    # We use a meaningful margin above the 0.2 threshold (> 0.25) rather than
-    # exactly > 0.2, because the generation-mix series lags real-time by ~1-3 h:
-    # the 168-row rolling window that straddles the publish-lag zone routinely
-    # shows a null rate of 0.20–0.22 (a handful of null hours in an otherwise
-    # clean window). Treating that as "unreliable" would incorrectly discard all
-    # history up to the current day and leave only ~2 weeks of clean data.
+    # Find the start of the reliably dense window.
+    # Pre-July 2024 data has a ~50% null rate. We find the FIRST time the 7-day
+    # trailing null rate drops <= 25%. (We scan forwards rather than backwards
+    # so a temporary SMARD API outage later in the dataset doesn't trick us
+    # into discarding years of good historical data).
     null_frac        = df[core_cols].isna().mean(axis=1)
     weekly_null_rate = null_frac.rolling(24 * 7, min_periods=24 * 7).mean()
-    still_unreliable = weekly_null_rate > 0.25
-    start = int(still_unreliable[still_unreliable].index.max() + 1) if still_unreliable.any() else 0
+    is_reliable      = weekly_null_rate <= 0.25
+    start = int(is_reliable.idxmax()) if is_reliable.any() else 0
 
     if start > 0:
         logger.info("Dropping %d early rows before the reliable dense window (starts %s)",
