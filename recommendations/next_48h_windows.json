@@ -1,31 +1,31 @@
 {
-  "origin": "2026-11-02 11:00:00+00:00",
+  "origin": "2026-11-03 09:00:00+00:00",
   "alpha": 0.5,
-  "recommendation": "Wait ~22h \u2014 best window starts Tue 09:00, runs 5h, avg 109 EUR/MWh, 47% renewable.",
+  "recommendation": "Wait ~48h \u2014 best window starts Thu 09:00, runs 1h, avg 209 EUR/MWh, 70% renewable.",
   "windows": [
     {
-      "start": "2026-11-03 09:00:00+00:00",
-      "end": "2026-11-03 14:00:00+00:00",
+      "start": "2026-11-05 09:00:00+00:00",
+      "end": "2026-11-05 10:00:00+00:00",
+      "duration_h": 1,
+      "avg_price": 209.41668273925782,
+      "avg_renewable_share": 0.6982928514480591,
+      "avg_score": 0.6641712421760395
+    },
+    {
+      "start": "2026-11-03 10:00:00+00:00",
+      "end": "2026-11-03 13:00:00+00:00",
+      "duration_h": 3,
+      "avg_price": 110.49609151204429,
+      "avg_renewable_share": 0.4965721666812897,
+      "avg_score": 0.6217434434531789
+    },
+    {
+      "start": "2026-11-05 00:00:00+00:00",
+      "end": "2026-11-05 05:00:00+00:00",
       "duration_h": 5,
-      "avg_price": 108.69593212890625,
-      "avg_renewable_share": 0.47007542848587036,
-      "avg_score": 0.7144303110376022
-    },
-    {
-      "start": "2026-11-04 09:00:00+00:00",
-      "end": "2026-11-04 12:00:00+00:00",
-      "duration_h": 3,
-      "avg_price": 158.84351933797203,
-      "avg_renewable_share": 0.5776947140693665,
-      "avg_score": 0.6999228259473046
-    },
-    {
-      "start": "2026-11-03 02:00:00+00:00",
-      "end": "2026-11-03 05:00:00+00:00",
-      "duration_h": 3,
-      "avg_price": 116.50023183186848,
-      "avg_renewable_share": 0.41338780522346497,
-      "avg_score": 0.58023879729652
+      "avg_price": 180.57899349975582,
+      "avg_renewable_share": 0.612197995185852,
+      "avg_score": 0.601249526705561
     }
   ]
 }
